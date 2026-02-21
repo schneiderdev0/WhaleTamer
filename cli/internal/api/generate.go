@@ -19,6 +19,7 @@ type GenerateRequest struct {
 type ProjectContext struct {
 	Paths       []string          `json:"paths,omitempty"`
 	Manifests   map[string]string `json:"manifests,omitempty"`
+	Snippets    map[string]string `json:"snippets,omitempty"`
 	Entrypoints []string          `json:"entrypoints,omitempty"`
 	Commands    []string          `json:"commands,omitempty"`
 }

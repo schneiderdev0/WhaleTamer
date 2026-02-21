@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class ProjectContext(BaseModel):
     paths: list[str] = Field(default_factory=list)
     manifests: dict[str, str] = Field(default_factory=dict)
+    snippets: dict[str, str] = Field(default_factory=dict)
     entrypoints: list[str] = Field(default_factory=list)
     commands: list[str] = Field(default_factory=list)
 

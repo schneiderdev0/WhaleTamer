@@ -67,6 +67,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	reqContext := &api.ProjectContext{
 		Paths:       ctx.Paths,
 		Manifests:   ctx.Manifests,
+		Snippets:    ctx.Snippets,
 		Entrypoints: ctx.Entrypoints,
 		Commands:    ctx.Commands,
 	}

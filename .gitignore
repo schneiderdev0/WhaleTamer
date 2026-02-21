@@ -14,3 +14,9 @@ wheels/
 .vscode/
 .cursor/
 .cursorrules
+
+# Environment files
+.env
+.env.*
+*/.env
+*/.env.*

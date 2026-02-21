@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from google import genai
+from google.genai import errors as genai_errors
 
 from app.core.settings import s
 from app.modules.generate.schemas import FileContent, ProjectContext
@@ -112,6 +113,7 @@ Hard rules:
 5) Respect runtime constraints from manifests (for example requires-python vs base image tag).
 6) If plan or context indicates FastAPI factory usage, run uvicorn with --factory.
 7) Escape newlines correctly in JSON strings.
+8) Service environment variables must match project settings usage. If settings/database code uses postgres_host/postgres_user/postgres_password/postgres_db, then provide POSTGRES_* vars to app and migrations services (not only DATABASE_URL).
 """
 
 _REPAIR_PROMPT_TEMPLATE = """Fix the previous response so that it satisfies all constraints.
@@ -138,6 +140,10 @@ class ValidationOutcome:
     errors: list[str]
 
 
+class GeminiAuthError(Exception):
+    """Fatal Gemini auth/permission error. Must not be retried."""
+
+
 def _extract_json(text: str) -> dict[str, Any]:
     payload = text.strip()
     match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", payload)
@@ -155,19 +161,33 @@ def _call_gemini_json(
     response_schema: dict[str, Any],
     temperature: float = 0.1,
 ) -> dict[str, Any]:
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config={
-            "temperature": temperature,
-            "response_mime_type": "application/json",
-            "response_json_schema": response_schema,
-        },
-    )
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config={
+                "temperature": temperature,
+                "response_mime_type": "application/json",
+                "response_json_schema": response_schema,
+            },
+        )
+    except genai_errors.ClientError as exc:
+        if exc.code in {401, 403}:
+            raise GeminiAuthError(_format_gemini_auth_error(exc)) from exc
+        raise
     raw = response.text
     if not raw:
         raise ValueError("Gemini returned empty response")
     return _extract_json(raw)
+
+
+def _format_gemini_auth_error(exc: genai_errors.ClientError) -> str:
+    raw = str(exc)
+    if "reported as leaked" in raw:
+        return "Gemini auth error: API key is reported as leaked. Generate a new key and update backend/.env."
+    if "PERMISSION_DENIED" in raw:
+        return "Gemini auth error: PERMISSION_DENIED. Verify API key and Gemini API access."
+    return f"Gemini auth error: {raw}"
 
 
 def _context_to_json(project_context: ProjectContext | None) -> str:
@@ -221,6 +241,8 @@ def _validate(
         content = file.content
         if lower_path in {"docker-compose.yaml", "docker-compose.yml"} and re.search(r"(?im)^\s*version\s*:", content):
             errors.append(f"{path}: remove obsolete 'version' from compose file")
+        if lower_path in {"docker-compose.yaml", "docker-compose.yml"}:
+            errors.extend(_validate_compose_env_contract(path, content, project_context))
         if path == "Dockerfile" or path.endswith("/Dockerfile"):
             if "uv sync" in content and not _has_uv_runtime(content):
                 errors.append(f"{path}: uses 'uv sync' but runtime command is not 'uv run ...' or '.venv/bin/...'")
@@ -327,6 +349,37 @@ def _parse_copy_sources(args: str) -> list[str]:
     return filtered[:-1]
 
 
+def _validate_compose_env_contract(
+    path: str,
+    compose_content: str,
+    project_context: ProjectContext | None,
+) -> list[str]:
+    errors: list[str] = []
+    if project_context is None:
+        return errors
+    if not _project_uses_postgres_settings(project_context):
+        return errors
+
+    has_database_url = bool(re.search(r"(?im)^\s*DATABASE_URL\s*:", compose_content))
+    has_postgres_vars = all(
+        re.search(rf"(?im)^\s*{name}\s*:", compose_content)
+        for name in ("POSTGRES_HOST", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
+    )
+    if has_database_url and not has_postgres_vars:
+        errors.append(
+            f"{path}: project settings appear to use POSTGRES_* variables, but compose defines only DATABASE_URL"
+        )
+    return errors
+
+
+def _project_uses_postgres_settings(project_context: ProjectContext) -> bool:
+    snippets = project_context.snippets or {}
+    merged = "\n".join(snippets.values())
+    if not merged:
+        return False
+    return all(key in merged for key in ("postgres_host", "postgres_user", "postgres_password", "postgres_db"))
+
+
 def _build_repair_prompt(original_prompt: str, previous_output: str, errors: list[str]) -> str:
     error_lines = "\n".join(f"- {err}" for err in errors)
     return _REPAIR_PROMPT_TEMPLATE.format(
@@ -381,6 +434,11 @@ def generate_docker_files(
             format=format,
             context_json=context_json,
         )
+    except GeminiAuthError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=502,
@@ -412,8 +470,13 @@ def generate_docker_files(
                 temperature=0.1,
             )
             files = _parse_files(data)
+        except GeminiAuthError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=str(exc),
+            ) from exc
         except Exception as exc:
-            errors = [f"Response parse error: {exc!s}"]
+            errors = [f"Generation error: {exc!s}"]
             prompt = _build_repair_prompt(base_prompt, "{}", errors)
             continue
 

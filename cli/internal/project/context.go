@@ -17,6 +17,7 @@ const maxManifestBytes = 24 * 1024
 type Context struct {
 	Paths       []string
 	Manifests   map[string]string
+	Snippets    map[string]string
 	Entrypoints []string
 	Commands    []string
 }
@@ -49,6 +50,13 @@ var entrypointCandidates = []string{
 	"main.go",
 }
 
+var snippetPathSuffixes = []string{
+	"app/core/settings.py",
+	"app/core/database.py",
+	"migrations/env.py",
+	"alembic.ini",
+}
+
 // BuildContext собирает компактный контекст проекта для генерации.
 func BuildContext(root string) (*Context, error) {
 	absRoot, err := filepath.Abs(root)
@@ -57,6 +65,7 @@ func BuildContext(root string) (*Context, error) {
 	}
 	ctx := &Context{
 		Manifests: map[string]string{},
+		Snippets:  map[string]string{},
 	}
 	if err := filepath.WalkDir(absRoot, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -97,6 +106,12 @@ func BuildContext(root string) (*Context, error) {
 		}
 		if contains(entrypointCandidates, base) || strings.HasSuffix(rel, "/main.py") || strings.HasSuffix(rel, "/app/main.py") {
 			ctx.Entrypoints = append(ctx.Entrypoints, rel)
+		}
+		if hasAnySuffix(rel, snippetPathSuffixes) {
+			content, err := readAtMost(filepath.Join(absRoot, rel), maxManifestBytes)
+			if err == nil && strings.TrimSpace(content) != "" {
+				ctx.Snippets[rel] = content
+			}
 		}
 	}
 	ctx.Entrypoints = dedupeSorted(ctx.Entrypoints)
@@ -179,6 +194,15 @@ func parsePyprojectCommands(content string) []string {
 func contains(values []string, needle string) bool {
 	for _, v := range values {
 		if v == needle {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAnySuffix(value string, suffixes []string) bool {
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(value, suffix) {
 			return true
 		}
 	}
