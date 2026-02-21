@@ -1,0 +1,27 @@
+[project]
+name = "whaletamer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "asyncpg>=0.31.0",
+    "email-validator>=2.3.0",
+    "fastapi[standard]>=0.128.0",
+    "google-genai>=1.0.0",
+    "greenlet>=3.1.1",
+    "alembic>=1.18.0",
+    "passlib[argon2]>=1.7.4",
+    "python-jose[cryptography]>=3.5.0",
+    "sqlalchemy>=2.0.45",
+]
+
+[tool.poe.tasks]
+dev = "uv run uvicorn app.main:main --factory --reload"
+migrate-run = "uv run alembic upgrade head"
+migrate-new = "uv run alembic revision --autogenerate"
+
+[dependency-groups]
+dev = [
+    "poethepoet>=0.40.0",
+]
