@@ -9,14 +9,15 @@ CLI утилита для автоматизации создания Dockerfile
 cd cli
 go run .
 # или с аргументами:
-go run . --token YOUR_TOKEN generate
+go run . generate
 ```
 
 **Сборка бинарника:**
 ```bash
 cd cli
 go build -o wt .
-./wt --token YOUR_TOKEN generate
+./wt
+./wt generate
 ```
 
 По умолчанию запросы идут на `http://localhost:8000`. Для другого бекенда: `--api https://your-api.com` или переменная окружения `WHALETAMER_API_URL`.
@@ -27,6 +28,11 @@ go build -o wt .
 
 Используется **постоянный CLI-токен** (не JWT с сайта). Его создаёт авторизованный пользователь на сайте: `POST /auth/cli-tokens` (Bearer JWT), в ответ приходит `token` — его один раз вводят в CLI. CLI сохраняет токен в `~/.config/whaletamer/token` (или `%APPDATA%\whaletamer\token` на Windows) и в следующих запусках подставляет автоматически.
 
+Поведение:
+- При первом запуске `wt` CLI запросит токен, проверит его и сохранит.
+- Далее `wt generate` работает без `--token`.
+- Для смены аккаунта: `wt token set` (или `wt token set <TOKEN>`).
+
 Токен можно также задать флагом `--token` / `-t` или переменной окружения `WHALETAMER_TOKEN`. Перед выполнением команд токен проверяется запросом `POST /auth/cli-tokens/verify` с телом `{"token": "..."}`. Базовый URL по умолчанию — `http://localhost:8000`; можно изменить флагом `--api` или переменной `WHALETAMER_API_URL`.
 
 ### Команда `generate`
@@ -34,17 +40,23 @@ go build -o wt .
 Собирает структуру проекта (дерево или Markdown), при необходимости сохраняет её в файл, отправляет на `POST /generate` и создаёт полученные Dockerfile и docker-compose файлы.
 
 ```bash
-# Токен и генерация (структура не сохраняется в файл)
-./wt --token YOUR_TOKEN generate
+# Первая инициализация токена
+./wt
+
+# Генерация без --token
+./wt generate
 
 # Сохранить структуру в MD
-./wt -t YOUR_TOKEN generate --save-structure project-structure.md --format markdown
+./wt generate --save-structure project-structure.md --format markdown
 
 # Сохранить структуру в текстовый файл (дерево)
-./wt -t YOUR_TOKEN generate -s structure.txt -f tree
+./wt generate -s structure.txt -f tree
 
 # Указать корень проекта и свой API
-./wt --token YOUR_TOKEN --api https://your-backend.example.com generate -p ./myapp
+./wt --api https://your-backend.example.com generate -p ./myapp
+
+# Смена токена (например, при смене аккаунта)
+./wt token set
 ```
 
 ### Флаги `generate`
