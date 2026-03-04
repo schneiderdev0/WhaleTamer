@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: my_cli_app
+    # The ENTRYPOINT defined in the Dockerfile will be executed when the container starts.
+    # To pass arguments to the CLI, use 'docker-compose run cli <args>'.
+    # For example: docker-compose run cli generate --type=api
+    # If you want to run a specific command directly, you can uncomment and modify the 'command' below.
+    # command: ["/usr/local/bin/cli", "--help"]

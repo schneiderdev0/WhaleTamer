@@ -1,0 +1,74 @@
+# OS / system
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs / runtime
+*.log
+*.pid
+*.seed
+*.pid.lock
+*.out
+*.err
+
+# Environment files (keep examples)
+.env
+.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
+
+# Node.js
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Yarn Berry local cache (keep sharable dirs if used)
+frontend/.yarn/*
+!frontend/.yarn/patches
+!frontend/.yarn/plugins
+!frontend/.yarn/releases
+!frontend/.yarn/sdks
+!frontend/.yarn/versions
+
+# Frontend build/cache
+frontend/dist/
+frontend/.parcel-cache/
+frontend/.cache/
+
+# Python
+**/__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.Python
+**/.venv/
+**/venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.pyre/
+**/.hypothesis/
+**/.coverage
+**/.coverage.*
+htmlcov/
+
+# Go
+*.test
+*.prof
+coverage.out
+
+# Local built binaries in this repo
+backend/wt
+telegram-bot/telegram-bot
+
+# Temporary files
+tmp/
+temp/

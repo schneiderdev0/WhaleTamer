@@ -1,0 +1,17 @@
+services:
+  telegram-bot:
+    build: .
+    container_name: wt-telegram-bot
+    restart: unless-stopped
+    environment:
+      WT_TG_BOT_TOKEN: ${WT_TG_BOT_TOKEN}
+      WT_BACKEND_URL: ${WT_BACKEND_URL:-http://backend:8000}
+      WT_BOT_STATE_PATH: /data/state.json
+      WT_TG_UPDATE_MODE: ${WT_TG_UPDATE_MODE:-polling}
+      WT_TG_WEBHOOK_URL: ${WT_TG_WEBHOOK_URL:-}
+      WT_TG_WEBHOOK_LISTEN_ADDR: ${WT_TG_WEBHOOK_LISTEN_ADDR:-:8080}
+      WT_TG_WEBHOOK_PATH: ${WT_TG_WEBHOOK_PATH:-/}
+    volumes:
+      - ./data:/data
+    ports:
+      - "8080:8080"
