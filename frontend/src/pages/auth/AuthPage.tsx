@@ -16,12 +16,12 @@ export function AuthPage() {
   const { t } = useLanguage();
 
   useEffect(() => {
-    // Если на нас вернулись с ?token=...&user_id=...&email=...
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
     const userId = params.get("user_id");
     const email = params.get("email");
-    if (token && userId && email) {
+
+    if (token && userId) {
       setAuth(token, { id: userId, email });
       navigate("/dashboard", { replace: true });
       return;
