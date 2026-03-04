@@ -53,6 +53,21 @@ export type MessageKey =
   | "telegram.copyError"
   | "telegram.statusError"
   | "telegram.tokenError"
+  | "telegram.settingsTitle"
+  | "telegram.settingsUnavailable"
+  | "telegram.settingsEnabled"
+  | "telegram.settingsFrequency"
+  | "telegram.settingsSeverity"
+  | "telegram.settingsSave"
+  | "telegram.settingsSaving"
+  | "telegram.settingsSaved"
+  | "telegram.settingsLoadError"
+  | "telegram.settingsSaveError"
+  | "telegram.frequency.event"
+  | "telegram.frequency.hourly"
+  | "telegram.frequency.daily"
+  | "telegram.severity.all"
+  | "telegram.severity.critical"
   | "theme.dark"
   | "theme.light"
   | "lang.ru"
@@ -119,6 +134,21 @@ const ru: Messages = {
   "telegram.copyError": "Не удалось скопировать токен в буфер обмена.",
   "telegram.statusError": "Не удалось получить статус Telegram интеграции.",
   "telegram.tokenError": "Не удалось создать токен привязки.",
+  "telegram.settingsTitle": "Настройки уведомлений",
+  "telegram.settingsUnavailable": "Сначала привяжите Telegram-чат.",
+  "telegram.settingsEnabled": "Уведомления включены",
+  "telegram.settingsFrequency": "Частота",
+  "telegram.settingsSeverity": "Критичность",
+  "telegram.settingsSave": "Сохранить настройки",
+  "telegram.settingsSaving": "Сохранение...",
+  "telegram.settingsSaved": "Настройки Telegram обновлены.",
+  "telegram.settingsLoadError": "Не удалось загрузить настройки уведомлений.",
+  "telegram.settingsSaveError": "Не удалось сохранить настройки уведомлений.",
+  "telegram.frequency.event": "По событию",
+  "telegram.frequency.hourly": "Раз в час",
+  "telegram.frequency.daily": "Раз в день",
+  "telegram.severity.all": "Все",
+  "telegram.severity.critical": "Только критичные",
   "theme.dark": "Тёмная",
   "theme.light": "Светлая",
   "lang.ru": "Русский",
@@ -183,6 +213,21 @@ const en: Messages = {
   "telegram.copyError": "Failed to copy token to clipboard.",
   "telegram.statusError": "Failed to load Telegram integration status.",
   "telegram.tokenError": "Failed to create link token.",
+  "telegram.settingsTitle": "Notification settings",
+  "telegram.settingsUnavailable": "Link your Telegram chat first.",
+  "telegram.settingsEnabled": "Notifications enabled",
+  "telegram.settingsFrequency": "Frequency",
+  "telegram.settingsSeverity": "Severity",
+  "telegram.settingsSave": "Save settings",
+  "telegram.settingsSaving": "Saving...",
+  "telegram.settingsSaved": "Telegram settings updated.",
+  "telegram.settingsLoadError": "Failed to load notification settings.",
+  "telegram.settingsSaveError": "Failed to save notification settings.",
+  "telegram.frequency.event": "By event",
+  "telegram.frequency.hourly": "Hourly",
+  "telegram.frequency.daily": "Daily",
+  "telegram.severity.all": "All",
+  "telegram.severity.critical": "Critical only",
   "theme.dark": "Dark",
   "theme.light": "Light",
   "lang.ru": "Russian",
