@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { useAPI } from "../../hooks/useAPI";
 import { useLanguage } from "../../hooks/useLanguage";
@@ -34,17 +34,42 @@ export function ReportsPage() {
     return <p>{t("reports.loading")}</p>;
   }
 
+  const completed = data?.filter((r) => r.status === "completed").length ?? 0;
+  const failed = data?.filter((r) => r.status === "failed").length ?? 0;
+
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">{t("reports.title")}</h1>
+      <h1 className="text-3xl font-bold tracking-tight">{t("reports.title")}</h1>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="wt-panel rounded-xl p-4 text-sm">
+          <div className="text-muted-foreground">{t("reports.total")}</div>
+          <div className="text-2xl font-bold">{data?.length ?? 0}</div>
+        </div>
+        <div className="wt-panel rounded-xl p-4 text-sm">
+          <div className="text-muted-foreground">{t("reports.completed")}</div>
+          <div className="text-2xl font-bold">{completed}</div>
+        </div>
+        <div className="wt-panel rounded-xl p-4 text-sm">
+          <div className="text-muted-foreground">{t("reports.failed")}</div>
+          <div className="text-2xl font-bold">{failed}</div>
+        </div>
+      </div>
       {data && data.length === 0 && (
-        <p className="text-muted-foreground text-sm">{t("reports.empty")}</p>
+        <div className="wt-panel rounded-xl p-5 text-sm">
+          <p className="text-muted-foreground">{t("reports.emptyWithCta")}</p>
+          <Link
+            to="/projects"
+            className="mt-3 inline-flex items-center rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground"
+          >
+            {t("reports.toProjects")}
+          </Link>
+        </div>
       )}
       <div className="space-y-2">
         {data?.map((r) => (
-          <div
+          <button
             key={r.id}
-            className="rounded-md border border-muted px-4 py-3 text-sm flex items-center justify-between cursor-pointer hover:bg-muted/40"
+            className="wt-panel w-full rounded-md px-4 py-3 text-left text-sm flex items-center justify-between cursor-pointer hover:bg-muted/40"
             onClick={() => navigate(`/reports/${r.id}`)}
           >
             <div>
@@ -53,7 +78,7 @@ export function ReportsPage() {
                 {new Date(r.created_at).toLocaleString()} • {r.status}
               </div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>

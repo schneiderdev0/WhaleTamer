@@ -24,5 +24,4 @@ class IntegrationToken(BaseModel):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     type: Mapped[str] = mapped_column(String, nullable=False, default=IntegrationType.DATA_COLLECTOR.value)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
-    metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-
+    int_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

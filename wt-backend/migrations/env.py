@@ -19,6 +19,7 @@ from app.core.base_model import Base
 from app.modules.auth import models, integration_models, oauth_models
 from app.modules.collector import models as collector_models
 from app.modules.generate import models as generate_models
+from app.modules.projects import models as projects_models
 from app.modules.reports import models as reports_models
 
 target_metadata = Base.metadata

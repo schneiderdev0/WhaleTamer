@@ -65,3 +65,142 @@ Whale Tamer - сервис для автоматизации создания Do
 - (P3) Реализовать форматированные уведомления: отправка кратких отчетов по состоянию серверов/контейнеров и детальных рекомендаций от Gemini. ✅
 - (P3) Добавить настройки частоты/типа уведомлений (критические/все, по расписанию/по событию) и хранить их на backend. ✅
 - (P3) Подготовить Dockerfile и конфигурацию для деплоя бота (токен бота, URL Webhook, окружения). ✅
+
+## Итоговый отчет и следующие шаги (2026-03-04)
+
+### Итог
+- Все задачи из этого файла завершены: `27/27` пунктов отмечены как выполненные.
+- Дальше нужно выполнить стандартный цикл: установить зависимости, прогнать проверки и поднять весь стек.
+
+### 1. Предварительные требования
+- Docker + Docker Compose v2
+- Go `1.22+`
+- Python `3.14+` и `uv`
+- Node.js `20+` и Corepack (для Yarn `4.5.1`)
+
+### 2. Установка зависимостей
+
+```bash
+# backend
+cd backend
+uv sync --frozen
+
+# frontend
+cd ../frontend
+corepack enable
+yarn install --immutable
+
+# cli
+cd ../cli
+go mod download
+
+# data-collector
+cd ../data-collector
+go mod download
+
+# telegram-bot
+cd ../telegram-bot
+go mod download
+```
+
+### 3. Минимальная конфигурация backend (`backend/.env`)
+
+```env
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+POSTGRES_DB=dev_db
+POSTGRES_USER=root
+POSTGRES_PASSWORD=qwerty
+
+JWT_SECRET_KEY=change_me
+GEMINI_API_KEY=your_gemini_key
+
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+GITHUB_REDIRECT_URI=http://localhost:8000/auth/github/callback
+FRONTEND_BASE_URL=http://localhost:5173
+
+# Пример для локальной разработки:
+BACKEND_CORS_ORIGINS=["http://localhost:5173"]
+```
+
+### 4. Прогон проверок/тестов
+
+```bash
+# backend (проверка импортов и синтаксиса)
+cd backend
+uv run python -m compileall app
+
+# frontend
+cd ../frontend
+yarn lint
+yarn build
+
+# go-модули (в репозитории пока нет *_test.go, но go test проверяет сборку)
+cd ../cli && go test ./...
+cd ../data-collector && go test ./...
+cd ../telegram-bot && go test ./...
+```
+
+### 5. Запуск всех элементов проекта (локальный dev-сценарий)
+
+1. Запустить БД, миграции и backend:
+
+```bash
+cd backend
+docker compose -f docker-compose-dev.yaml up --build
+```
+
+2. Запустить frontend (в отдельном терминале):
+
+```bash
+cd frontend
+yarn dev
+```
+
+3. Получить токены (после авторизации и получения JWT пользователя):
+
+```bash
+# Data Collector token
+curl -X POST http://localhost:8000/collector/token \
+  -H "Authorization: Bearer <JWT>"
+
+# Telegram link token
+curl -X POST http://localhost:8000/telegram/link-token \
+  -H "Authorization: Bearer <JWT>"
+
+# CLI token
+curl -X POST http://localhost:8000/auth/cli-tokens \
+  -H "Authorization: Bearer <JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+4. Запустить Data Collector (в отдельном терминале):
+
+```bash
+cd data-collector
+WT_BACKEND_URL=http://localhost:8000 \
+WT_DC_TOKEN=<DC_TOKEN> \
+WT_SOURCE=dev-local \
+WT_INTERVAL_SECONDS=15 \
+go run .
+```
+
+5. Запустить Telegram Bot (в отдельном терминале):
+
+```bash
+cd telegram-bot
+WT_TG_BOT_TOKEN=<BOT_TOKEN> \
+WT_BACKEND_URL=http://localhost:8000 \
+WT_TG_UPDATE_MODE=polling \
+go run .
+```
+
+6. Проверить CLI-флоу генерации (в отдельном терминале):
+
+```bash
+cd cli
+go run . token set <CLI_TOKEN>
+go run . generate -p /path/to/your/project
+```

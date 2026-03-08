@@ -21,7 +21,7 @@ async def create_cli_token(
     """Создаёт CLI-токен, сохраняет хэш в БД, возвращает (plain_token, record)."""
     plain = f"wt_{secrets.token_urlsafe(32)}"
     token_hash = _hash_token(plain)
-    record = CLIToken(user_id=user_id, token_hash=token_hash, name=name)
+    record = CLIToken(user_id=user_id, token_hash=token_hash, plain_token=plain, name=name)
     db.add(record)
     await db.commit()
     await db.refresh(record)
@@ -48,3 +48,14 @@ async def list_cli_tokens(user_id: uuid.UUID, db: AsyncSession) -> list[CLIToken
     stmt = select(CLIToken).where(CLIToken.user_id == user_id).order_by(CLIToken.created_at.desc())
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def delete_cli_token(user_id: uuid.UUID, token_id: uuid.UUID, db: AsyncSession) -> bool:
+    stmt = select(CLIToken).where(CLIToken.id == token_id, CLIToken.user_id == user_id)
+    result = await db.execute(stmt)
+    token = result.scalar_one_or_none()
+    if not token:
+        return False
+    await db.delete(token)
+    await db.commit()
+    return True

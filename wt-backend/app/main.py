@@ -7,6 +7,7 @@ from app.core.settings import s
 from app.modules.auth.router import router as auth_router
 from app.modules.collector.router import router as collector_router
 from app.modules.generate.router import router as generate_router
+from app.modules.projects.router import router as projects_router
 from app.modules.reports.router import router as reports_router
 from app.modules.telegram.router import router as telegram_router
 
@@ -30,6 +31,7 @@ def main() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(auth_router)
+    app.include_router(projects_router)
     app.include_router(generate_router)
     app.include_router(collector_router)
     app.include_router(reports_router)

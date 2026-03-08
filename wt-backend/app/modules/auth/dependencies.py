@@ -1,11 +1,15 @@
 """Зависимости для auth: приём и JWT, и CLI-токена в Bearer."""
 
+import uuid
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
+from app.modules.auth.models import User
 from app.modules.auth.services import cli_tokens as cli_tokens_service
 from app.modules.auth.services import integration_tokens as integration_tokens_service
 from app.modules.auth.integration_models import IntegrationType
@@ -61,4 +65,25 @@ async def get_current_user_from_bearer(
         return {"id": str(user.id), "sub": user.email}
     # JWT
     payload = decode_access_token(token)
-    return {"id": payload.get("id"), "sub": payload.get("sub")}
+    raw_user_id = payload.get("id")
+    if not raw_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+    try:
+        user_id = uuid.UUID(str(raw_user_id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found for token. Please login again.",
+        )
+    return {"id": str(user.id), "sub": user.email}

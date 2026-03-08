@@ -1,4 +1,5 @@
 import secrets
+import base64
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -30,7 +31,7 @@ def _require_github_oauth_settings() -> None:
         )
 
 
-def build_github_authorize_url(scope: str = "read:user user:email") -> str:
+def build_github_authorize_url(scope: str = "read:user user:email repo") -> str:
     _require_github_oauth_settings()
     state = _create_state()
     params = {
@@ -110,6 +111,90 @@ async def fetch_primary_email(token: str) -> str | None:
     return None
 
 
+async def fetch_user_repositories(token: str) -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.get(
+            "https://api.github.com/user/repos",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+            params={"per_page": 100, "sort": "updated"},
+        )
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"GitHub repositories fetch failed: {resp.text}")
+    data = resp.json()
+    if not isinstance(data, list):
+        return []
+    return data
+
+
+async def fetch_repository_tree(token: str, full_name: str, branch: str) -> list[str]:
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{full_name}/git/trees/{branch}",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+            params={"recursive": "1"},
+        )
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"GitHub tree fetch failed: {resp.text}")
+    payload = resp.json()
+    entries = payload.get("tree")
+    if not isinstance(entries, list):
+        return []
+    paths: list[str] = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "blob":
+            continue
+        path = item.get("path")
+        if isinstance(path, str) and path:
+            paths.append(path)
+    return paths
+
+
+async def upsert_repository_file(
+    token: str,
+    full_name: str,
+    branch: str,
+    path: str,
+    content: str,
+    message: str,
+) -> dict[str, Any]:
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        get_resp = await client.get(
+            f"https://api.github.com/repos/{full_name}/contents/{path}",
+            headers=headers,
+            params={"ref": branch},
+        )
+        sha: str | None = None
+        if get_resp.status_code == 200:
+            current = get_resp.json()
+            if isinstance(current, dict):
+                raw_sha = current.get("sha")
+                if isinstance(raw_sha, str):
+                    sha = raw_sha
+        elif get_resp.status_code not in {404}:
+            raise HTTPException(status_code=502, detail=f"GitHub content read failed: {get_resp.text}")
+
+        body: dict[str, Any] = {
+            "message": message,
+            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+            "branch": branch,
+        }
+        if sha:
+            body["sha"] = sha
+
+        put_resp = await client.put(
+            f"https://api.github.com/repos/{full_name}/contents/{path}",
+            headers=headers,
+            json=body,
+        )
+    if put_resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"GitHub content update failed: {put_resp.text}")
+    data = put_resp.json()
+    return data if isinstance(data, dict) else {}
+
+
 async def login_or_register_github_user(
     db: AsyncSession,
     github_user: dict[str, Any],
@@ -152,7 +237,7 @@ async def login_or_register_github_user(
             user_id=user.id,
             provider=provider,
             provider_user_id=provider_user_id,
-            metadata={
+            auth_metadata={
                 "login": login,
                 "access_token": access_token,
             },
@@ -162,4 +247,3 @@ async def login_or_register_github_user(
 
     jwt_token = create_access_token({"sub": user.email, "id": str(user.id)})
     return {"access_token": jwt_token, "token_type": "bearer"}
-

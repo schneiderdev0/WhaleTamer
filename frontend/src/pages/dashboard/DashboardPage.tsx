@@ -63,49 +63,56 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">{t("dashboard.title")}</h1>
-        <p className="text-muted-foreground text-sm">{t("dashboard.description")}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Whale Tamer
+        </p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("dashboard.title")}</h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">{t("dashboard.description")}</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-3xl">
-        <div className="flex gap-4 items-center">
-          <label className="text-sm font-medium">{t("dashboard.format")}</label>
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value as "tree" | "markdown")}
-            className="rounded-md border border-muted bg-background px-2 py-1 text-sm"
+      <section className="wt-panel rounded-xl p-5 md:p-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm font-semibold">{t("dashboard.format")}</label>
+            <select
+              value={format}
+              onChange={(e) => setFormat(e.target.value as "tree" | "markdown")}
+              className="wt-input rounded-md px-3 py-1.5 text-sm"
+            >
+              <option value="tree">tree</option>
+              <option value="markdown">markdown</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">{t("dashboard.structure")}</label>
+            <textarea
+              value={projectStructure}
+              onChange={(e) => setProjectStructure(e.target.value)}
+              rows={10}
+              placeholder={t("dashboard.placeholder")}
+              className="wt-input w-full rounded-lg px-3 py-2 text-sm font-mono"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            <option value="tree">tree</option>
-            <option value="markdown">markdown</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium">{t("dashboard.structure")}</label>
-          <textarea
-            value={projectStructure}
-            onChange={(e) => setProjectStructure(e.target.value)}
-            rows={8}
-            placeholder={t("dashboard.placeholder")}
-            className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm font-mono"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-        >
-          {loading ? t("dashboard.running") : t("dashboard.run")}
-        </button>
-      </form>
+            {loading ? t("dashboard.running") : t("dashboard.run")}
+          </button>
+        </form>
+      </section>
 
       {job && (
-        <div className="rounded-md border border-muted p-4 space-y-2 max-w-xl text-sm">
-          <div className="font-medium">{t("dashboard.jobCreated")}</div>
-          <div className="text-xs text-muted-foreground break-all">
-            job_id: {job.job_id}
+        <section className="wt-panel max-w-xl rounded-xl p-4 text-sm">
+          <div className="space-y-2">
+            <div className="font-semibold">{t("dashboard.jobCreated")}</div>
+            <div className="break-all rounded-md bg-background/60 px-2 py-1 text-xs text-muted-foreground">
+              job_id: {job.job_id}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span>
+          <div className="mt-3 flex items-center gap-3">
+            <span className="font-medium">
               {t("dashboard.status")}: {status?.status ?? job.status}
             </span>
             <button
@@ -118,9 +125,11 @@ export function DashboardPage() {
             </button>
           </div>
           {status?.error && (
-            <div className="text-xs text-red-400">Ошибка: {status.error}</div>
+            <div className="mt-3 rounded-md border border-red-400/30 bg-red-400/10 px-2 py-1 text-xs text-red-400">
+              Ошибка: {status.error}
+            </div>
           )}
-        </div>
+        </section>
       )}
     </div>
   );

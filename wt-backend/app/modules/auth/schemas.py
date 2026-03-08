@@ -39,4 +39,25 @@ class CLITokenVerifyResponse(BaseModel):
 class CLITokenListItem(BaseModel):
     id: UUID
     name: str | None
+    token: str | None
     created_at: datetime
+
+
+class GitHubStatusResponse(BaseModel):
+    connected: bool
+
+
+class GitHubRepositoryItem(BaseModel):
+    id: int
+    name: str
+    full_name: str
+    private: bool
+    html_url: str
+    default_branch: str
+
+
+class UserProfileResponse(BaseModel):
+    user_id: str
+    email: str
+    auth_type: str
+    github_connected: bool

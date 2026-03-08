@@ -16,5 +16,5 @@ class OAuthAccount(BaseModel):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     provider_user_id: Mapped[str] = mapped_column(String, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-
+    # DB column is named "metadata" in existing migrations; map it to a safe Python attribute.
+    auth_metadata: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)

@@ -22,4 +22,5 @@ class CLIToken(BaseModel):
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     token_hash: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    plain_token: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
