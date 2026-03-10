@@ -17,6 +17,7 @@ from app.modules.auth.schemas import (
     CLITokenVerifyResponse,
     CreateCLITokenDTO,
     EmailAuthDTO,
+    GitHubBranchItem,
     EmailRegDTO,
     GitHubRepositoryItem,
     GitHubStatusResponse,
@@ -160,6 +161,56 @@ async def github_repositories(
             )
         )
     return items
+
+
+@router.get(
+    "/github/repositories/{repo_id}/branches",
+    response_model=list[GitHubBranchItem],
+    summary="List branches for a GitHub repository",
+)
+async def github_repository_branches(
+    repo_id: int,
+    payload: dict = Depends(get_current_user_from_bearer),
+    db: AsyncSession = Depends(get_db),
+):
+    user_id = uuid.UUID(payload["id"])
+    stmt = (
+        select(OAuthAccount)
+        .where(OAuthAccount.user_id == user_id, OAuthAccount.provider == "github")
+        .order_by(OAuthAccount.created_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="GitHub is not connected")
+
+    access_token = (account.auth_metadata or {}).get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="GitHub access token is missing")
+
+    repos = await github_oauth.fetch_user_repositories(access_token)
+    repo = next(
+        (
+            item
+            for item in repos
+            if isinstance(item, dict) and isinstance(item.get("id"), int) and item.get("id") == repo_id
+        ),
+        None,
+    )
+    if not repo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GitHub repository not found")
+
+    full_name = str(repo.get("full_name") or "")
+    if not full_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="GitHub repository full_name is missing")
+
+    branches = await github_oauth.fetch_repository_branches(access_token, full_name)
+    return [
+        GitHubBranchItem(name=str(branch.get("name")))
+        for branch in branches
+        if isinstance(branch, dict) and isinstance(branch.get("name"), str) and branch.get("name")
+    ]
 
 
 @router.delete("/github/unlink", summary="Unlink GitHub account")

@@ -17,6 +17,10 @@ type GitHubRepo = {
   default_branch: string;
 };
 
+type GitHubBranch = {
+  name: string;
+};
+
 type Project = {
   id: string;
   github_repo_id: number;
@@ -54,6 +58,13 @@ export function GitHubProjectsPage() {
     queryFn: async () => (await api.get<GitHubRepo[]>("/auth/github/repositories")).data,
   });
 
+  const { data: branches, error: branchesError, isLoading: branchesLoading } = useQuery({
+    queryKey: ["github-repository-branches", repoId],
+    enabled: githubConnected && repoId !== null,
+    queryFn: async () =>
+      (await api.get<GitHubBranch[]>(`/auth/github/repositories/${repoId}/branches`)).data,
+  });
+
   const { data: projects, error: projectsError, refetch: refetchProjects } = useQuery({
     queryKey: ["projects"],
     queryFn: async () => (await api.get<Project[]>("/projects")).data,
@@ -62,8 +73,9 @@ export function GitHubProjectsPage() {
   useEffect(() => {
     if (githubStatusError) notifyError(githubStatusError, t("projects.githubStatusError"));
     if (reposError) notifyError(reposError, t("projects.reposLoadError"));
+    if (branchesError) notifyError(branchesError, t("projects.reposLoadError"));
     if (projectsError) notifyError(projectsError, t("projects.projectsLoadError"));
-  }, [githubStatusError, reposError, projectsError, notifyError, t]);
+  }, [githubStatusError, reposError, branchesError, projectsError, notifyError, t]);
 
   useEffect(() => {
     if (!repos || repos.length === 0) return;
@@ -73,6 +85,14 @@ export function GitHubProjectsPage() {
       setSelectedBranch(first.default_branch || "main");
     }
   }, [repos, repoId]);
+
+  useEffect(() => {
+    if (!branches || branches.length === 0) return;
+    const hasSelectedBranch = branches.some((branch) => branch.name === selectedBranch);
+    if (!hasSelectedBranch) {
+      setSelectedBranch(branches[0].name);
+    }
+  }, [branches, selectedBranch]);
 
   const selectedRepo = useMemo(
     () => repos?.find((r) => r.id === repoId) ?? null,
@@ -110,6 +130,15 @@ export function GitHubProjectsPage() {
     onError: (error) => notifyError(error, t("projects.syncError")),
   });
 
+  const handleGithubConnect = async () => {
+    try {
+      const res = await api.get<{ url: string }>("/auth/github/login");
+      window.location.href = res.data.url;
+    } catch (error) {
+      notifyError(error, t("profile.githubLinkError"));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -119,9 +148,16 @@ export function GitHubProjectsPage() {
 
       <section className="wt-panel rounded-xl p-5 md:p-6">
         {!githubConnected ? (
-          <p className="text-sm text-muted-foreground">
-            {t("projects.githubConnectRequired")}
-          </p>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t("projects.githubConnectRequired")}</p>
+            <button
+              type="button"
+              onClick={handleGithubConnect}
+              className="inline-flex items-center rounded-md border border-emerald-300/70 bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
+            >
+              {t("projects.connectGithub")}
+            </button>
+          </div>
         ) : (
           <div className="space-y-3">
             <div className="space-y-1">
@@ -145,15 +181,26 @@ export function GitHubProjectsPage() {
             </div>
             <div className="space-y-1">
               <label className="text-sm font-semibold">{t("projects.branch")}</label>
-              <input
+              <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                className="wt-input w-full rounded-md px-3 py-2 text-sm"
-              />
+                disabled={branchesLoading || !branches || branches.length === 0}
+                className="wt-input w-full rounded-md px-3 py-2 text-sm disabled:opacity-60"
+              >
+                {branchesLoading ? (
+                  <option value="">{t("projects.branchLoading")}</option>
+                ) : (
+                  branches?.map((branch) => (
+                    <option key={branch.name} value={branch.name}>
+                      {branch.name}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
             <button
               type="button"
-              disabled={!selectedRepo || linkMutation.isPending}
+              disabled={!selectedRepo || !selectedBranch || linkMutation.isPending}
               onClick={() => linkMutation.mutate()}
               className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
@@ -178,10 +225,12 @@ export function GitHubProjectsPage() {
                 <button
                   type="button"
                   onClick={() => syncMutation.mutate(p.id)}
-                  disabled={syncMutation.isPending}
+                  disabled={syncMutation.isPending && syncMutation.variables === p.id}
                   className="mt-3 rounded-md border border-muted px-3 py-1 text-xs font-semibold hover:bg-muted/40 disabled:opacity-60"
                 >
-                  {syncMutation.isPending ? t("projects.syncing") : t("projects.sync")}
+                  {syncMutation.isPending && syncMutation.variables === p.id
+                    ? t("projects.syncing")
+                    : t("projects.sync")}
                 </button>
               </article>
             ))}

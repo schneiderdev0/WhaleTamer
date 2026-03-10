@@ -1,5 +1,5 @@
-import secrets
 import base64
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -126,6 +126,21 @@ async def fetch_user_repositories(token: str) -> list[dict[str, Any]]:
     return data
 
 
+async def fetch_repository_branches(token: str, full_name: str) -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{full_name}/branches",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+            params={"per_page": 100},
+        )
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"GitHub branches fetch failed: {resp.text}")
+    data = resp.json()
+    if not isinstance(data, list):
+        return []
+    return data
+
+
 async def fetch_repository_tree(token: str, full_name: str, branch: str) -> list[str]:
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
@@ -149,6 +164,31 @@ async def fetch_repository_tree(token: str, full_name: str, branch: str) -> list
         if isinstance(path, str) and path:
             paths.append(path)
     return paths
+
+
+async def fetch_repository_file_content(token: str, full_name: str, branch: str, path: str) -> str | None:
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{full_name}/contents/{path}",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+            params={"ref": branch},
+        )
+    if resp.status_code == 404:
+        return None
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"GitHub content read failed: {resp.text}")
+    payload = resp.json()
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("encoding") != "base64":
+        return None
+    content = payload.get("content")
+    if not isinstance(content, str) or not content.strip():
+        return None
+    try:
+        return base64.b64decode(content, validate=False).decode("utf-8")
+    except Exception:
+        return None
 
 
 async def upsert_repository_file(

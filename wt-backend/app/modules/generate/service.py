@@ -114,6 +114,7 @@ Hard rules:
 6) If plan or context indicates FastAPI factory usage, run uvicorn with --factory.
 7) Escape newlines correctly in JSON strings.
 8) Service environment variables must match project settings usage. If settings/database code uses postgres_host/postgres_user/postgres_password/postgres_db, then provide POSTGRES_* vars to app and migrations services (not only DATABASE_URL).
+9) For Rust projects, never use deprecated Debian releases like buster and never install `libssl1.1`; prefer current images such as `rust:<version>-bookworm` and `debian:bookworm-slim` or another currently supported base image.
 """
 
 _REPAIR_PROMPT_TEMPLATE = """Fix the previous response so that it satisfies all constraints.
@@ -232,6 +233,7 @@ def _validate(
     project_paths = set(project_context.paths) if project_context else set()
     expect_factory = _has_factory_signal(project_context, plan)
     min_python = _extract_min_python(project_context.manifests if project_context else {})
+    is_rust_project = _is_rust_project(project_context)
     for file in files:
         path = file.path.strip()
         if not _is_allowed_output_path(path):
@@ -256,6 +258,8 @@ def _validate(
                     )
             if project_paths:
                 errors.extend(_validate_copy_sources(path, content, project_paths))
+            if is_rust_project:
+                errors.extend(_validate_rust_dockerfile(path, content))
     if not files:
         errors.append("Model returned empty files list")
     return ValidationOutcome(files=files, errors=errors)
@@ -297,6 +301,24 @@ def _extract_python_base_version(dockerfile: str) -> tuple[int, int] | None:
         if match:
             return int(match.group(1)), int(match.group(2))
     return None
+
+
+def _is_rust_project(project_context: ProjectContext | None) -> bool:
+    if project_context is None:
+        return False
+    if any(path.endswith("Cargo.toml") for path in project_context.paths):
+        return True
+    return any(path.endswith("Cargo.toml") for path in project_context.manifests)
+
+
+def _validate_rust_dockerfile(path: str, dockerfile: str) -> list[str]:
+    errors: list[str] = []
+    lowered = dockerfile.lower()
+    if "debian:buster" in lowered or "buster-slim" in lowered or re.search(r"(?im)^\s*from\s+rust:.*buster", lowered):
+        errors.append(f"{path}: Rust Dockerfile uses deprecated Debian buster base image")
+    if "libssl1.1" in lowered:
+        errors.append(f"{path}: Rust Dockerfile installs deprecated package libssl1.1")
+    return errors
 
 
 def _validate_copy_sources(path: str, dockerfile: str, project_paths: set[str]) -> list[str]:

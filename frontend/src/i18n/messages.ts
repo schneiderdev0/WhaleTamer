@@ -70,6 +70,7 @@ export type MessageKey =
   | "projects.githubHint"
   | "projects.repo"
   | "projects.branch"
+  | "projects.branchLoading"
   | "projects.link"
   | "projects.linking"
   | "projects.linkedSuccess"
@@ -82,6 +83,7 @@ export type MessageKey =
   | "projects.listTitle"
   | "projects.empty"
   | "projects.githubConnectRequired"
+  | "projects.connectGithub"
   | "projects.githubStatusError"
   | "projects.reposLoadError"
   | "projects.projectsLoadError"
@@ -232,6 +234,7 @@ const ru: Messages = {
   "projects.githubHint": "Введите URL репозитория GitHub и ветку для привязки проекта.",
   "projects.repo": "Репозиторий",
   "projects.branch": "Ветка",
+  "projects.branchLoading": "Загрузка веток...",
   "projects.link": "Привязать репозиторий",
   "projects.linking": "Привязка...",
   "projects.linkedSuccess": "Проект успешно добавлен.",
@@ -244,6 +247,7 @@ const ru: Messages = {
   "projects.listTitle": "Привязанные проекты",
   "projects.empty": "Пока нет привязанных репозиториев.",
   "projects.githubConnectRequired": "Подключите GitHub для автоматического создания Docker файлов",
+  "projects.connectGithub": "Привязать GitHub",
   "projects.githubStatusError": "Не удалось получить статус подключения GitHub.",
   "projects.reposLoadError": "Не удалось загрузить репозитории GitHub.",
   "projects.projectsLoadError": "Не удалось загрузить список проектов.",
@@ -397,6 +401,7 @@ const en: Messages = {
   "projects.githubHint": "Provide GitHub repository URL and branch to link the project.",
   "projects.repo": "Repository",
   "projects.branch": "Branch",
+  "projects.branchLoading": "Loading branches...",
   "projects.link": "Link repository",
   "projects.linking": "Linking...",
   "projects.linkedSuccess": "Project linked successfully.",
@@ -409,6 +414,7 @@ const en: Messages = {
   "projects.listTitle": "Linked projects",
   "projects.empty": "No linked repositories yet.",
   "projects.githubConnectRequired": "Connect GitHub for automatic Docker file generation",
+  "projects.connectGithub": "Connect GitHub",
   "projects.githubStatusError": "Failed to get GitHub connection status.",
   "projects.reposLoadError": "Failed to load GitHub repositories.",
   "projects.projectsLoadError": "Failed to load projects list.",

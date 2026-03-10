@@ -9,10 +9,39 @@ from app.modules.auth.dependencies import get_current_user_from_bearer
 from app.modules.auth.oauth_models import OAuthAccount
 from app.modules.auth.services import github_oauth
 from app.modules.generate.service import generate_docker_files
+from app.modules.generate.schemas import ProjectContext
 from app.modules.projects.models import Project
 from app.modules.projects.schemas import ProjectCreateRequest, ProjectResponse, ProjectSyncResponse
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+
+_MANIFEST_CANDIDATES = {
+    "pyproject.toml",
+    "requirements.txt",
+    "requirements-dev.txt",
+    "poetry.lock",
+    "Pipfile",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "go.mod",
+    "Cargo.toml",
+    "Gemfile",
+}
+
+_ENTRYPOINT_CANDIDATES = {
+    "main.py",
+    "app.py",
+    "manage.py",
+    "main.ts",
+    "main.js",
+    "server.ts",
+    "server.js",
+    "index.ts",
+    "index.js",
+    "main.go",
+}
 
 
 @router.get("", response_model=list[ProjectResponse], summary="List user projects")
@@ -49,11 +78,15 @@ async def link_project(
     stmt = select(Project).where(
         Project.user_id == user_id,
         Project.github_repo_id == body.github_repo_id,
+        Project.selected_branch == (body.selected_branch or body.default_branch),
     )
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project is already linked")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This repository branch is already linked",
+        )
 
     project = Project(
         user_id=user_id,
@@ -115,11 +148,17 @@ async def sync_project_docker_files(
     branch = project.selected_branch or project.default_branch or "main"
     paths = await github_oauth.fetch_repository_tree(access_token, project.full_name, branch)
     project_structure = "\n".join(paths[:800]) if paths else "README.md"
+    project_context = await _build_project_context(
+        access_token=access_token,
+        full_name=project.full_name,
+        branch=branch,
+        paths=paths,
+    )
 
     files = generate_docker_files(
         project_structure=project_structure,
         format="tree",
-        project_context=None,
+        project_context=project_context,
     )
 
     committed_paths: list[str] = []
@@ -138,4 +177,37 @@ async def sync_project_docker_files(
         project_id=project.id,
         branch=branch,
         committed_files=committed_paths,
+    )
+
+
+async def _build_project_context(
+    access_token: str,
+    full_name: str,
+    branch: str,
+    paths: list[str],
+) -> ProjectContext:
+    manifests: dict[str, str] = {}
+    entrypoints: list[str] = []
+
+    for path in paths:
+        base_name = path.rsplit("/", 1)[-1]
+        if base_name in _MANIFEST_CANDIDATES:
+            content = await github_oauth.fetch_repository_file_content(
+                token=access_token,
+                full_name=full_name,
+                branch=branch,
+                path=path,
+            )
+            if content and content.strip():
+                manifests[path] = content
+
+        if base_name in _ENTRYPOINT_CANDIDATES or path.endswith("/main.py") or path.endswith("/app/main.py"):
+            entrypoints.append(path)
+
+    return ProjectContext(
+        paths=paths,
+        manifests=manifests,
+        snippets={},
+        entrypoints=sorted(set(entrypoints)),
+        commands=[],
     )

@@ -56,6 +56,10 @@ class GitHubRepositoryItem(BaseModel):
     default_branch: str
 
 
+class GitHubBranchItem(BaseModel):
+    name: str
+
+
 class UserProfileResponse(BaseModel):
     user_id: str
     email: str

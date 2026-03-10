@@ -15,7 +15,13 @@ async def auth(dto: EmailAuthDTO, db: AsyncSession):
     if not user:
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
-    if not verify_password(dto.password, user.hashed_password):
+    if user.auth_type == "github" and not user.hashed_password:
+        raise HTTPException(
+            status_code=401,
+            detail="This email is registered via GitHub. Please sign in with GitHub.",
+        )
+
+    if not user.hashed_password or not verify_password(dto.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     if not user.is_active:
