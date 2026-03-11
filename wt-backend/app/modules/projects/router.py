@@ -27,6 +27,7 @@ _MANIFEST_CANDIDATES = {
     "yarn.lock",
     "go.mod",
     "Cargo.toml",
+    "Cargo.lock",
     "Gemfile",
 }
 
@@ -42,6 +43,10 @@ _ENTRYPOINT_CANDIDATES = {
     "index.js",
     "main.go",
 }
+
+_STRUCTURE_PATH_LIMIT = 180
+_CONTEXT_PATH_LIMIT = 120
+_MANIFEST_CONTENT_LIMIT = 6000
 
 
 @router.get("", response_model=list[ProjectResponse], summary="List user projects")
@@ -147,12 +152,13 @@ async def sync_project_docker_files(
 
     branch = project.selected_branch or project.default_branch or "main"
     paths = await github_oauth.fetch_repository_tree(access_token, project.full_name, branch)
-    project_structure = "\n".join(paths[:800]) if paths else "README.md"
+    compact_structure_paths = _select_relevant_paths(paths, limit=_STRUCTURE_PATH_LIMIT)
+    project_structure = "\n".join(compact_structure_paths) if compact_structure_paths else "README.md"
     project_context = await _build_project_context(
         access_token=access_token,
         full_name=project.full_name,
         branch=branch,
-        paths=paths,
+        paths=compact_structure_paths,
     )
 
     files = generate_docker_files(
@@ -186,10 +192,11 @@ async def _build_project_context(
     branch: str,
     paths: list[str],
 ) -> ProjectContext:
+    compact_context_paths = _select_relevant_paths(paths, limit=_CONTEXT_PATH_LIMIT)
     manifests: dict[str, str] = {}
     entrypoints: list[str] = []
 
-    for path in paths:
+    for path in compact_context_paths:
         base_name = path.rsplit("/", 1)[-1]
         if base_name in _MANIFEST_CANDIDATES:
             content = await github_oauth.fetch_repository_file_content(
@@ -199,15 +206,49 @@ async def _build_project_context(
                 path=path,
             )
             if content and content.strip():
-                manifests[path] = content
+                manifests[path] = content[:_MANIFEST_CONTENT_LIMIT]
 
         if base_name in _ENTRYPOINT_CANDIDATES or path.endswith("/main.py") or path.endswith("/app/main.py"):
             entrypoints.append(path)
 
     return ProjectContext(
-        paths=paths,
+        paths=compact_context_paths,
         manifests=manifests,
         snippets={},
         entrypoints=sorted(set(entrypoints)),
         commands=[],
     )
+
+
+def _select_relevant_paths(paths: list[str], limit: int) -> list[str]:
+    ranked = sorted(set(paths), key=lambda path: (-_path_priority(path), path))
+    selected = ranked[:limit]
+    return sorted(selected)
+
+
+def _path_priority(path: str) -> int:
+    base_name = path.rsplit("/", 1)[-1]
+    priority = 0
+
+    if base_name in _MANIFEST_CANDIDATES:
+        priority += 100
+    if base_name in _ENTRYPOINT_CANDIDATES:
+        priority += 90
+    if path in {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "README.md"}:
+        priority += 80
+    if path.endswith("/Dockerfile") or path.endswith(".dockerignore"):
+        priority += 70
+    if path.startswith("src/"):
+        priority += 50
+    if path.startswith("app/"):
+        priority += 45
+    if path.startswith("cmd/") or path.startswith("crates/") or path.startswith("packages/"):
+        priority += 40
+    if base_name in {"main.rs", "lib.rs", "mod.rs", "main.go", "package.json", "tsconfig.json"}:
+        priority += 35
+    if "/migrations/" in path or path.startswith("migrations/"):
+        priority += 20
+    if path.count("/") <= 1:
+        priority += 15
+
+    return priority

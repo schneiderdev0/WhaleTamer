@@ -1,6 +1,8 @@
 import json
+import logging
 import re
 import shlex
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,10 +11,17 @@ from google import genai
 from google.genai import errors as genai_errors
 
 from app.core.settings import s
+from app.modules.generate.analyzer import analyze_project_context
+from app.modules.generate.local_templates import generate_local_files
 from app.modules.generate.schemas import FileContent, ProjectContext
 
 GEMINI_MODEL = "gemini-2.5-flash"
 MAX_ATTEMPTS = 3
+MAX_QUOTA_RETRIES = 2
+MAX_RETRY_DELAY_SECONDS = 45
+LOG_SNIPPET_LIMIT = 600
+
+logger = logging.getLogger(__name__)
 
 PLAN_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -145,6 +154,10 @@ class GeminiAuthError(Exception):
     """Fatal Gemini auth/permission error. Must not be retried."""
 
 
+class GeminiQuotaError(Exception):
+    """Gemini quota/rate-limit error after retries."""
+
+
 def _extract_json(text: str) -> dict[str, Any]:
     payload = text.strip()
     match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", payload)
@@ -161,25 +174,81 @@ def _call_gemini_json(
     prompt: str,
     response_schema: dict[str, Any],
     temperature: float = 0.1,
+    stage: str = "files",
 ) -> dict[str, Any]:
-    try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config={
-                "temperature": temperature,
-                "response_mime_type": "application/json",
-                "response_json_schema": response_schema,
-            },
-        )
-    except genai_errors.ClientError as exc:
-        if exc.code in {401, 403}:
-            raise GeminiAuthError(_format_gemini_auth_error(exc)) from exc
-        raise
-    raw = response.text
-    if not raw:
-        raise ValueError("Gemini returned empty response")
-    return _extract_json(raw)
+    prompt_size = len(prompt)
+    for attempt in range(MAX_QUOTA_RETRIES + 1):
+        try:
+            logger.info(
+                "Gemini request started: stage=%s model=%s attempt=%s prompt_chars=%s",
+                stage,
+                GEMINI_MODEL,
+                attempt + 1,
+                prompt_size,
+            )
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config={
+                    "temperature": temperature,
+                    "response_mime_type": "application/json",
+                    "response_json_schema": response_schema,
+                },
+            )
+            raw = response.text
+            if not raw:
+                logger.warning(
+                    "Gemini returned empty response: stage=%s model=%s attempt=%s",
+                    stage,
+                    GEMINI_MODEL,
+                    attempt + 1,
+                )
+                raise ValueError("Gemini returned empty response")
+            logger.info(
+                "Gemini response received: stage=%s model=%s attempt=%s response_chars=%s snippet=%r",
+                stage,
+                GEMINI_MODEL,
+                attempt + 1,
+                len(raw),
+                _clip_for_log(raw),
+            )
+            return _extract_json(raw)
+        except genai_errors.ClientError as exc:
+            logger.warning(
+                "Gemini client error: stage=%s model=%s attempt=%s code=%s retry_delay=%s raw=%r",
+                stage,
+                GEMINI_MODEL,
+                attempt + 1,
+                getattr(exc, "code", None),
+                _extract_retry_delay_seconds(exc),
+                _clip_for_log(str(exc)),
+            )
+            if exc.code in {401, 403}:
+                raise GeminiAuthError(_format_gemini_auth_error(exc)) from exc
+            if exc.code == 429 or "RESOURCE_EXHAUSTED" in str(exc):
+                delay = _extract_retry_delay_seconds(exc)
+                if attempt < MAX_QUOTA_RETRIES and delay > 0:
+                    logger.info(
+                        "Gemini quota retry scheduled: stage=%s model=%s next_attempt=%s sleep_seconds=%s",
+                        stage,
+                        GEMINI_MODEL,
+                        attempt + 2,
+                        delay,
+                    )
+                    time.sleep(delay)
+                    continue
+                raise GeminiQuotaError(_format_gemini_quota_error(exc, delay)) from exc
+            raise
+        except Exception as exc:
+            logger.exception(
+                "Gemini unexpected error: stage=%s model=%s attempt=%s error=%r",
+                stage,
+                GEMINI_MODEL,
+                attempt + 1,
+                exc,
+            )
+            raise
+    raise GeminiQuotaError("Gemini quota exceeded. Retry later.")
 
 
 def _format_gemini_auth_error(exc: genai_errors.ClientError) -> str:
@@ -191,6 +260,36 @@ def _format_gemini_auth_error(exc: genai_errors.ClientError) -> str:
     return f"Gemini auth error: {raw}"
 
 
+def _extract_retry_delay_seconds(exc: genai_errors.ClientError) -> int:
+    raw = str(exc)
+    match = re.search(r"retry in\s+(\d+(?:\.\d+)?)s", raw, flags=re.IGNORECASE)
+    if not match:
+        match = re.search(r"'retryDelay':\s*'(\d+)s'", raw)
+    if not match:
+        return 0
+    try:
+        value = int(float(match.group(1)))
+    except ValueError:
+        return 0
+    return max(0, min(value + 1, MAX_RETRY_DELAY_SECONDS))
+
+
+def _format_gemini_quota_error(exc: genai_errors.ClientError, delay: int) -> str:
+    raw = str(exc)
+    if delay > 0:
+        return f"Gemini quota exceeded for {GEMINI_MODEL}. Automatic retry window expired; retry in about {delay} seconds."
+    if "RESOURCE_EXHAUSTED" in raw or "quota" in raw.lower():
+        return f"Gemini quota exceeded for {GEMINI_MODEL}. Retry later or increase Gemini API quota."
+    return f"Gemini request failed: {raw}"
+
+
+def _clip_for_log(value: str, limit: int = LOG_SNIPPET_LIMIT) -> str:
+    cleaned = " ".join(value.split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[:limit] + "...[truncated]"
+
+
 def _context_to_json(project_context: ProjectContext | None) -> str:
     if project_context is None:
         return json.dumps(
@@ -199,6 +298,34 @@ def _context_to_json(project_context: ProjectContext | None) -> str:
             indent=2,
         )
     return project_context.model_dump_json(indent=2, exclude_none=True)
+
+
+def _log_generation_input(project_structure: str, project_context: ProjectContext | None, context_json: str) -> None:
+    if project_context is None:
+        logger.info(
+            "Gemini input summary: project_structure_chars=%s context_json_chars=%s paths=0 manifests=0 manifests_chars=0 entrypoints=0 commands=0",
+            len(project_structure),
+            len(context_json),
+        )
+        return
+
+    manifests = project_context.manifests or {}
+    manifest_chars = sum(len(content) for content in manifests.values())
+    logger.info(
+        "Gemini input summary: project_structure_chars=%s context_json_chars=%s paths=%s manifests=%s manifests_chars=%s entrypoints=%s commands=%s",
+        len(project_structure),
+        len(context_json),
+        len(project_context.paths or []),
+        len(manifests),
+        manifest_chars,
+        len(project_context.entrypoints or []),
+        len(project_context.commands or []),
+    )
+    if manifests:
+        logger.info(
+            "Gemini manifest summary: keys=%s",
+            [key for key in sorted(manifests.keys())],
+        )
 
 
 def _parse_files(data: dict[str, Any]) -> list[FileContent]:
@@ -427,6 +554,7 @@ def _generate_plan(
         prompt=prompt,
         response_schema=PLAN_SCHEMA,
         temperature=0.1,
+        stage="plan",
     )
 
 
@@ -448,6 +576,16 @@ def generate_docker_files(
 
     client = genai.Client(api_key=s.gemini_api_key)
     context_json = _context_to_json(project_context)
+    _log_generation_input(project_structure=project_structure, project_context=project_context, context_json=context_json)
+    analysis = analyze_project_context(project_context)
+    logger.info("Local analyzer summary: %s", analysis.to_log_dict())
+    local_files = generate_local_files(analysis, project_context)
+    if local_files:
+        logger.info("Local template generation selected: stack=%s files=%s", analysis.stack, [f.path for f in local_files])
+        outcome = _validate(local_files, project_context, plan=None)
+        if not outcome.errors:
+            return outcome.files
+        logger.warning("Local template validation failed, falling back to Gemini: errors=%s", outcome.errors)
 
     try:
         plan = _generate_plan(
@@ -456,6 +594,11 @@ def generate_docker_files(
             format=format,
             context_json=context_json,
         )
+    except GeminiQuotaError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=str(exc),
+        ) from exc
     except GeminiAuthError as exc:
         raise HTTPException(
             status_code=502,
@@ -490,8 +633,14 @@ def generate_docker_files(
                 prompt=prompt,
                 response_schema=FILES_SCHEMA,
                 temperature=0.1,
+                stage="files" if prompt == base_prompt else "repair",
             )
             files = _parse_files(data)
+        except GeminiQuotaError as exc:
+            raise HTTPException(
+                status_code=429,
+                detail=str(exc),
+            ) from exc
         except GeminiAuthError as exc:
             raise HTTPException(
                 status_code=502,

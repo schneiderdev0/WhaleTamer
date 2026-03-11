@@ -23,14 +23,10 @@ export function HomePage() {
           </Link>
         </div>
       </section>
-      <div className="grid w-full max-w-4xl gap-3 md:grid-cols-3">
+      <div className="grid w-full max-w-4xl gap-3 md:grid-cols-2">
         <article className="wt-panel rounded-xl p-5 text-left text-sm">
           <h2 className="font-semibold">{t("home.card.projectsTitle")}</h2>
           <p className="mt-1 text-muted-foreground">{t("home.card.projectsText")}</p>
-        </article>
-        <article className="wt-panel rounded-xl p-5 text-left text-sm">
-          <h2 className="font-semibold">{t("home.card.reportsTitle")}</h2>
-          <p className="mt-1 text-muted-foreground">{t("home.card.reportsText")}</p>
         </article>
         <article className="wt-panel rounded-xl p-5 text-left text-sm">
           <h2 className="font-semibold">{t("home.card.cliTitle")}</h2>

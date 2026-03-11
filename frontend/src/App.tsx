@@ -3,8 +3,6 @@ import { Moon, Sun } from "lucide-react";
 import { HomePage } from "./pages/home/HomePage";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { GitHubProjectsPage } from "./pages/projects/GitHubProjectsPage";
-import { ReportsPage } from "./pages/reports/ReportsPage";
-import { ReportDetailsPage } from "./pages/reports/ReportDetailsPage";
 import { CLIPage } from "./pages/cli/CLIPage";
 import { ProfilePage } from "./pages/profile/ProfilePage";
 import { useTheme } from "./hooks/useTheme";
@@ -40,14 +38,6 @@ function App() {
                   }
                 >
                   {t("nav.projects")}
-                </NavLink>
-                <NavLink
-                  to="/reports"
-                  className={({ isActive }) =>
-                    `px-1 py-1 text-muted-foreground hover:text-foreground hover:underline underline-offset-4 ${isActive ? "text-foreground underline" : ""}`
-                  }
-                >
-                  {t("nav.reports")}
                 </NavLink>
                 <NavLink
                   to="/cli"
@@ -101,8 +91,6 @@ function App() {
           <Route path="/login" element={<AuthPage />} />
           <Route path="/projects" element={isAuthorized ? <GitHubProjectsPage /> : <Navigate to="/login" replace />} />
           <Route path="/dashboard" element={isAuthorized ? <GitHubProjectsPage /> : <Navigate to="/login" replace />} />
-          <Route path="/reports" element={isAuthorized ? <ReportsPage /> : <Navigate to="/login" replace />} />
-          <Route path="/reports/:id" element={isAuthorized ? <ReportDetailsPage /> : <Navigate to="/login" replace />} />
           <Route path="/cli" element={isAuthorized ? <CLIPage /> : <Navigate to="/login" replace />} />
           <Route path="/profile" element={isAuthorized ? <ProfilePage /> : <Navigate to="/login" replace />} />
         </Routes>
